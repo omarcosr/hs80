@@ -5,6 +5,8 @@
 
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
+#define STBTT_malloc(size,user) cui_hs80_malloc(size)
+#define STBTT_free(pointer,user) cui_hs80_free(pointer)
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -150,13 +152,11 @@ void cui__fonts_init(cui_ctx *ui, bool defaults) {
     for (int i = 0; i < 5; i++) ui->roles[i] = -1;
 #ifndef CUI_NO_DEFAULT_FONTS
     if (defaults) {
-        const unsigned char *data[5] = { cui_font_inter_regular, cui_font_inter_medium, cui_font_geist_medium,
-                                         cui_font_geist_mono, cui_font_lucide };
-        unsigned int size[5] = { cui_font_inter_regular_size, cui_font_inter_medium_size, cui_font_geist_medium_size,
-                                 cui_font_geist_mono_size, cui_font_lucide_size };
-        unsigned int packed[5] = { cui_font_inter_regular_packed, cui_font_inter_medium_packed, cui_font_geist_medium_packed,
-                                   cui_font_geist_mono_packed, cui_font_lucide_packed };
-        for (int i = 0; i < 5; i++) {
+        const unsigned char *data[4] = { cui_font_inter_regular, cui_font_inter_medium, cui_font_geist_medium,cui_font_lucide };
+        unsigned int size[4] = { cui_font_inter_regular_size,cui_font_inter_medium_size,cui_font_geist_medium_size,cui_font_lucide_size };
+        unsigned int packed[4] = { cui_font_inter_regular_packed,cui_font_inter_medium_packed,cui_font_geist_medium_packed,cui_font_lucide_packed };
+        const int role[4]={CUI_FONT_BODY,CUI_FONT_MEDIUM,CUI_FONT_DISPLAY,CUI_FONT_ICONS};
+        for (int i = 0; i < 4; i++) {
             /* the embedded fonts are compressed; unpack each into a buffer the font owns */
             unsigned char *buf = cui__alloc(ui, size[i]);
             cui_font f = -1;
@@ -164,12 +164,12 @@ void cui__fonts_init(cui_ctx *ui, bool defaults) {
                 f = cui_font_load_memory(ui, buf, size[i], false);
             if (f >= 0) ui->fonts[f - CUI__USER_FONT_BASE].owned = true;
             else cui__free(ui, buf);
-            ui->roles[i] = f >= 0 ? f - CUI__USER_FONT_BASE : -1;
+            ui->roles[role[i]] = f >= 0 ? f - CUI__USER_FONT_BASE : -1;
         }
+        ui->roles[CUI_FONT_MONO]=ui->roles[CUI_FONT_BODY];
         if (ui->roles[4] >= 0) ui->fonts[ui->roles[4]].is_icon = true;
-        /* Geist and Geist Mono fall back to Inter for characters they lack */
+        /* The display face falls back to Inter for characters it lacks. */
         cui_font_add_fallback(ui, CUI_FONT_DISPLAY, CUI_FONT_MEDIUM);
-        cui_font_add_fallback(ui, CUI_FONT_MONO, CUI_FONT_BODY);
     }
 #else
     (void)defaults;

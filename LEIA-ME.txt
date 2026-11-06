@@ -1,15 +1,15 @@
-HS80 MAX — controle em C / CUI
+HS80 MAX — executável único em C / CUI
 
-Abra HS80-Controle.exe nesta pasta dist. Ele inicia o controle em segundo
-plano quando necessário. Fechar a janela mantém o controle funcionando.
+Abra HS80.exe. O mesmo processo controla o headset e abre o painel.
+Fechar a janela libera a memória da interface e mantém LEDs e microfone.
+No ícone perto do relógio: abrir painel ou encerrar o aplicativo.
 
-No painel: LEDs apagados, estado do microfone, bateria e iniciar com Windows.
-No ícone perto do relógio: abrir painel ou encerrar controle.
-A haste continua controlando o mudo do microfone.
+O painel contém LEDs apagados, estado do microfone, bateria e iniciar
+com o Windows. A haste continua controlando o mudo do microfone.
 
-Mantenha HS80-Controle.exe e HS80-Leds.exe juntos. hs80.ini guarda sua
-preferência de iluminação. A pasta licencas contém os avisos obrigatórios.
-Não precisa de .NET, navegador, arquivos de fontes externos ou DLLs do CUI.
-O programa usa as bibliotecas do próprio Windows.
+HS80.exe --run inicia somente em segundo plano. A janela é criada apenas
+quando solicitada. Não depende de outro programa, .NET, navegador,
+arquivo de fonte ou DLL do CUI. Usa as bibliotecas do próprio Windows.
 
+hs80.ini guarda sua preferência. licencas contém os avisos obrigatórios.
 O projeto e as instruções de compilação ficam na pasta acima de dist.

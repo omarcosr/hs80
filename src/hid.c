@@ -6,7 +6,7 @@
 #include <string.h>
 #include <wchar.h>
 static bool transfer(hs_hid *d,BYTE packet[64],bool write){
- OVERLAPPED op={0};op.hEvent=CreateEventW(NULL,TRUE,FALSE,NULL);if(!op.hEvent)return false;
+ OVERLAPPED op={0};op.hEvent=d->io_event;if(!op.hEvent||!ResetEvent(op.hEvent))return false;
  DWORD done=0;BOOL ok=write?WriteFile(d->handle,packet,64,&done,&op):ReadFile(d->handle,packet,64,&done,&op);
  DWORD error=ok?ERROR_SUCCESS:GetLastError();
  if(!ok&&error==ERROR_IO_PENDING){
@@ -15,9 +15,8 @@ static bool transfer(hs_hid *d,BYTE packet[64],bool write){
   else {CancelIoEx(d->handle,&op);GetOverlappedResult(d->handle,&op,&done,TRUE);error=(wait==WAIT_OBJECT_0+1)?ERROR_CANCELLED:ERROR_TIMEOUT;ok=FALSE;}
   if(!ok&&error==ERROR_IO_PENDING)error=GetLastError();
  }
- CloseHandle(op.hEvent);
  if(!ok){SetLastError(error);return false;}
- if(done<6){SetLastError(ERROR_INVALID_DATA);return false;}return true;
+ if((write&&done!=64)||done<6){SetLastError(ERROR_INVALID_DATA);return false;}return true;
 }
 static bool command(hs_hid *d,BYTE packet[64],BYTE child,BYTE cmd,uint16_t *value){
  ULONGLONG now=GetTickCount64();if(now-d->last_write<50){DWORD delay=(DWORD)(50-(now-d->last_write));if(d->stop&&WaitForSingleObject(d->stop,delay)==WAIT_OBJECT_0){SetLastError(ERROR_CANCELLED);return false;}if(!d->stop)Sleep(delay);}
@@ -27,7 +26,7 @@ static bool command(hs_hid *d,BYTE packet[64],BYTE child,BYTE cmd,uint16_t *valu
 }
 bool hs_hid_get(hs_hid *d,uint8_t child,uint8_t property,uint16_t *value){BYTE packet[64];hs_packet_get(packet,child,property);return command(d,packet,child,2,value);}
 static bool set(hs_hid *d,BYTE property,uint16_t value){BYTE packet[64];hs_packet_set(packet,property,value);return command(d,packet,1,1,NULL);}
-void hs_hid_close(hs_hid *d){if(d->handle&&d->handle!=INVALID_HANDLE_VALUE){CancelIoEx(d->handle,NULL);CloseHandle(d->handle);}d->handle=NULL;}
+void hs_hid_close(hs_hid *d){if(d->handle&&d->handle!=INVALID_HANDLE_VALUE){CancelIoEx(d->handle,NULL);CloseHandle(d->handle);}d->handle=NULL;if(d->io_event)CloseHandle(d->io_event);d->io_event=NULL;}
 bool hs_hid_open(hs_hid *d,HANDLE stop){
  memset(d,0,sizeof(*d));d->stop=stop;GUID guid;HidD_GetHidGuid(&guid);
  HDEVINFO list=SetupDiGetClassDevsW(&guid,NULL,NULL,DIGCF_PRESENT|DIGCF_DEVICEINTERFACE);if(list==INVALID_HANDLE_VALUE)return false;
@@ -55,6 +54,8 @@ bool hs_hid_open(hs_hid *d,HANDLE stop){
  if(!selected[0]||ambiguous){SetLastError(ambiguous?ERROR_DUP_NAME:ERROR_DEVICE_NOT_CONNECTED);return false;}
  d->handle=CreateFileW(selected,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,NULL,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,NULL);
  if(d->handle==INVALID_HANDLE_VALUE){d->handle=NULL;return false;}
+ d->io_event=CreateEventW(NULL,TRUE,FALSE,NULL);
+ if(!d->io_event){DWORD error=GetLastError();hs_hid_close(d);SetLastError(error);return false;}
  uint16_t receiver=0,headset=0;
  if(!hs_hid_get(d,0,0x12,&receiver)||!hs_hid_get(d,1,0x12,&headset)||!hs_model_valid(receiver,headset)){DWORD error=GetLastError();hs_hid_close(d);SetLastError(error?error:ERROR_BAD_DEVICE);return false;}
  return true;

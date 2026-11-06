@@ -1,6 +1,8 @@
 #include "hs80.h"
 #include <cui/cui.h>
 #include <cui/cui_app.h>
+#include <cui/cui_hs80_memory.h>
+#include <process.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,8 +10,15 @@
 static cui_ctx *timer_ui;
 static char issue[192];
 static WNDPROC base_proc;
+static HANDLE panel_thread;
+static PVOID volatile panel_hwnd;
+static volatile LONG close_requested;
+static ULONG_PTR panel_generation;
+static bool open_again,shutting_down;
+HWND hs_panel_window(void){return (HWND)InterlockedCompareExchangePointer(&panel_hwnd,NULL,NULL);}
 static LRESULT CALLBACK panel_proc(HWND window,UINT message,WPARAM wparam,LPARAM lparam){
  if(message==HS_MSG_STATE){if(timer_ui)cui_request_redraw(timer_ui);return 0;}
+ if(message==HS_MSG_RAISE){ShowWindow(window,SW_RESTORE);SetForegroundWindow(window);return 0;}
  return CallWindowProcW(base_proc,window,message,wparam,lparam);
 }
 static void CALLBACK tick(HWND window,UINT message,UINT_PTR id,DWORD time){
@@ -90,21 +99,58 @@ static void frame(cui_ctx *ui){
   }
  }
 }
-int main(void){
- HANDLE mutex=CreateMutexW(NULL,TRUE,L"Local\\HS80-Control-Panel-marcos");
- if(!mutex)return 1;
- if(GetLastError()==ERROR_ALREADY_EXISTS){HWND existing=FindWindowW(NULL,HS_PANEL_TITLE);if(existing){ShowWindow(existing,SW_RESTORE);SetForegroundWindow(existing);}CloseHandle(mutex);return 0;}
- bool capture=getenv("CUI_SCREENSHOT")!=NULL;int width=560,height=590;
+static int panel_loop(bool capture){
+ if(!cui_hs80_memory_begin())return 1;
+ issue[0]=0;int width=560,height=590;
  if(capture){const char *size=getenv("HS80_CAPTURE_SIZE");int w=0,h=0;if(size&&sscanf_s(size,"%dx%d",&w,&h)==2&&w>=460&&w<=1600&&h>=500&&h<=1200){width=w;height=h;}}
- if(!capture&&!hs_controller_window())hs_launch_worker();
  cui_app *app=cui_app_create(&(cui_app_desc){.title="HS80 MAX — Controle",.width=width,.height=height,.min_width=460,.min_height=500,.hidden=capture,.renderer=CUI_RENDERER_SOFTWARE,.follow_system_theme=true,.accent=CUI_ACCENT_GREEN});
- if(!app){ReleaseMutex(mutex);CloseHandle(mutex);return 1;}
+ if(!app){cui_hs80_memory_end();return 1;}
  timer_ui=cui_app_ui(app);cui_set_reduced_motion(timer_ui,true);cui_theme_get(timer_ui)->font_scale=1.08f;
  HWND window=(HWND)cui_app_native_window(app);HICON icon=hs_icon();
  base_proc=(WNDPROC)SetWindowLongPtrW(window,GWLP_WNDPROC,(LONG_PTR)panel_proc);
+ InterlockedExchangePointer(&panel_hwnd,window);
  if(icon){SendMessageW(window,WM_SETICON,ICON_SMALL,(LPARAM)icon);SendMessageW(window,WM_SETICON,ICON_BIG,(LPARAM)icon);}
  SetTimer(window,1,15000,tick);
- while(cui_app_frame(app))frame(cui_app_ui(app));
+ if(!capture&&InterlockedCompareExchange(&close_requested,0,0))cui_app_quit(app);
+ while(cui_app_frame(app)){
+  if(!capture&&InterlockedCompareExchange(&close_requested,0,0)){cui_app_quit(app);continue;}
+  frame(cui_app_ui(app));
+ }
+ InterlockedExchangePointer(&panel_hwnd,NULL);
  timer_ui=NULL;KillTimer(window,1);cui_app_destroy(app);if(icon)DestroyIcon(icon);
- ReleaseMutex(mutex);CloseHandle(mutex);return 0;
+ cui_hs80_memory_end();return 0;
+}
+static unsigned __stdcall panel_entry(void *context){
+ int result=panel_loop(false);
+ HWND controller=hs_controller_window();
+ if(controller)PostMessageW(controller,HS_MSG_PANEL_DONE,(WPARAM)(ULONG_PTR)context,0);
+ return (unsigned)result;
+}
+void hs_panel_show(void){
+ if(shutting_down)return;
+ if(panel_thread&&WaitForSingleObject(panel_thread,0)==WAIT_OBJECT_0){CloseHandle(panel_thread);panel_thread=NULL;}
+ if(panel_thread){
+  if(InterlockedCompareExchange(&close_requested,0,0)){open_again=true;return;}
+  HWND window=hs_panel_window();if(window)PostMessageW(window,HS_MSG_RAISE,0,0);
+  return;
+ }
+ open_again=false;InterlockedExchange(&close_requested,0);panel_generation++;
+ panel_thread=(HANDLE)_beginthreadex(NULL,0,panel_entry,(void *)panel_generation,0,NULL);
+}
+void hs_panel_close(void){
+ open_again=false;InterlockedExchange(&close_requested,1);
+ HWND window=hs_panel_window();if(window)PostMessageW(window,WM_CLOSE,0,0);
+}
+void hs_panel_reap(ULONG_PTR generation){
+ if(!panel_thread||generation!=panel_generation)return;
+ WaitForSingleObject(panel_thread,INFINITE);CloseHandle(panel_thread);panel_thread=NULL;
+ if(open_again&&!shutting_down)hs_panel_show();
+}
+void hs_panel_shutdown(void){
+ shutting_down=true;hs_panel_close();
+ if(panel_thread){WaitForSingleObject(panel_thread,INFINITE);CloseHandle(panel_thread);panel_thread=NULL;}
+}
+int hs_panel_capture(void){
+ if(!getenv("CUI_SCREENSHOT"))return 2;
+ return panel_loop(true);
 }

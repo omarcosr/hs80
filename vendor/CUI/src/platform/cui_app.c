@@ -13,13 +13,14 @@ static bool cui__env_is(const char *name, const char *value) {
 
 static void cui__app_make_software(cui_app *app) {
     if (!app->sw) app->sw = cui_sw_create();
+    cui_sw_set_threads(app->sw,1);
     app->software = true;
     cui_renderer_iface iface = cui_sw_iface(app->sw);
     cui_set_renderer(app->ui, &iface);
 }
 
 cui_app *cui_app_create(const cui_app_desc *desc) {
-    cui_app *app = calloc(1, sizeof *app);
+    cui_app *app = cui_hs80_calloc(1, sizeof *app);
     if (!app) return NULL;
     if (desc) app->desc = *desc;
     cui_app_desc *d = &app->desc;
@@ -48,11 +49,11 @@ cui_app *cui_app_create(const cui_app_desc *desc) {
     cd.theme = mode;
     cd.accent = d->accent;
     app->ui = cui_create(&cd);
-    if (!app->ui) { free(app); return NULL; }
+    if (!app->ui) { cui_hs80_free(app); return NULL; }
     if (!cui__plat_init(app)) {
         fprintf(stderr, "cui: could not create a window (%s backend)\n", cui__plat_name());
         cui_destroy(app->ui);
-        free(app);
+        cui_hs80_free(app);
         return NULL;
     }
 #ifndef CUI_HS80_SOFTWARE_ONLY
@@ -105,10 +106,10 @@ void cui_app_destroy(cui_app *app) {
      * deliver focus and size messages while the window is destroyed */
     cui__plat_shutdown(app);
     if (app->sw) cui_sw_destroy(app->sw);
-    free(app->sw_pixels);
+    cui_hs80_free(app->sw_pixels);
     cui_destroy(app->ui);
-    free(app->clipboard);
-    free(app);
+    cui_hs80_free(app->clipboard);
+    cui_hs80_free(app);
 }
 
 cui_ctx *cui_app_ui(cui_app *app) { return app->ui; }
@@ -136,11 +137,11 @@ static void cui__app_set_clip(void *user, const char *utf8) { cui__app_set_clipb
 static const char *cui__app_get_clip(void *user) { cui_app *app = user; return app->clipboard; }
 
 void cui__app_set_clipboard_cache(cui_app *app, const char *utf8) {
-    free(app->clipboard);
+    cui_hs80_free(app->clipboard);
     app->clipboard = NULL;
     if (!utf8) return;
     size_t n = strlen(utf8);
-    app->clipboard = malloc(n + 1);
+    app->clipboard = cui_hs80_malloc(n + 1);
     if (app->clipboard) memcpy(app->clipboard, utf8, n + 1);
 }
 
@@ -160,8 +161,8 @@ void cui__app_render(cui_app *app) {
 #endif
     {
         if (w != app->sw_w || h != app->sw_h) {
-            free(app->sw_pixels);
-            app->sw_pixels = malloc((size_t)w * (size_t)h * 4);
+            cui_hs80_free(app->sw_pixels);
+            app->sw_pixels = cui_hs80_malloc((size_t)w * (size_t)h * 4);
             app->sw_w = w; app->sw_h = h;
         }
         if (!app->sw_pixels) return;
@@ -191,12 +192,12 @@ bool cui_app_frame(cui_app *app) {
         if (app->screenshot_path && ++app->frames >= app->screenshot_frames) {
             const cui_draw_data *dd = cui_get_draw_data(app->ui);
             int w = dd->width_px, h = dd->height_px;
-            unsigned char *px = malloc((size_t)w * (size_t)h * 4);
+            unsigned char *px = cui_hs80_malloc((size_t)w * (size_t)h * 4);
             if (px && cui_app_screenshot(app, px, w, h)) {
                 bool ok = cui_write_png(app->screenshot_path, px, w, h, w * 4);
                 fprintf(stderr, "cui: %s %s\n", ok ? "saved" : "could not save", app->screenshot_path);
             }
-            free(px);
+            cui_hs80_free(px);
             app->running = false;
         }
     }

@@ -7,9 +7,9 @@
 /* Memory                                                                   */
 /* ------------------------------------------------------------------------ */
 
-static void *cui__default_alloc(size_t size, void *user) { (void)user; return malloc(size); }
-static void *cui__default_realloc(void *p, size_t size, void *user) { (void)user; return realloc(p, size); }
-static void cui__default_free(void *p, void *user) { (void)user; free(p); }
+static void *cui__default_alloc(size_t size, void *user) { (void)user; return cui_hs80_malloc(size); }
+static void *cui__default_realloc(void *p, size_t size, void *user) { (void)user; return cui_hs80_realloc(p, size); }
+static void cui__default_free(void *p, void *user) { (void)user; cui_hs80_free(p); }
 
 void *cui__alloc(cui_ctx *ui, size_t size) {
     void *p = ui->alloc.alloc(size, ui->alloc.user);

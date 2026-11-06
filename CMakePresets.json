@@ -10,7 +10,7 @@
     }
   ],
   "buildPresets": [
-    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": ["dist"], "jobs": 4, "nativeToolOptions": ["/nr:false"] }
+    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": ["hs80", "hs80_tests", "hs80_memory_tests"], "jobs": 4, "nativeToolOptions": ["/nr:false"] }
   ],
   "testPresets": [
     { "name": "release", "configurePreset": "release", "configuration": "Release", "output": { "outputOnFailure": true } }

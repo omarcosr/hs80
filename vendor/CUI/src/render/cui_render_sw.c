@@ -32,7 +32,7 @@ struct cui_sw_renderer {
 };
 
 static void *cui__sw_xrealloc(void *p, size_t n) {
-    void *q = realloc(p, n);
+    void *q = cui_hs80_realloc(p, n);
     if (!q && n) { fprintf(stderr, "cui: out of memory\n"); abort(); }
     return q;
 }
@@ -75,7 +75,7 @@ static void cui__sw_tex_destroy(void *user, cui_texture tex) {
     cui_sw_renderer *r = user;
     int slot = (int)tex - 1;
     if (slot < 0 || slot >= r->tex_count) return;
-    free(r->tex[slot].data);
+    cui_hs80_free(r->tex[slot].data);
     r->tex[slot].data = NULL;
     r->tex[slot].used = false;
 }
@@ -94,7 +94,7 @@ static int cui__cpu_count(void) {
 }
 
 cui_sw_renderer *cui_sw_create(void) {
-    cui_sw_renderer *r = calloc(1, sizeof *r);
+    cui_sw_renderer *r = cui_hs80_calloc(1, sizeof *r);
     if (!r) return NULL;
     int n = cui__cpu_count();
     r->threads = n > 8 ? 8 : (n < 1 ? 1 : n);
@@ -103,9 +103,9 @@ cui_sw_renderer *cui_sw_create(void) {
 
 void cui_sw_destroy(cui_sw_renderer *r) {
     if (!r) return;
-    for (int i = 0; i < r->tex_count; i++) free(r->tex[i].data);
-    free(r->tex);
-    free(r);
+    for (int i = 0; i < r->tex_count; i++) cui_hs80_free(r->tex[i].data);
+    cui_hs80_free(r->tex);
+    cui_hs80_free(r);
 }
 
 void cui_sw_set_threads(cui_sw_renderer *r, int threads) { r->threads = threads < 1 ? 1 : (threads > 32 ? 32 : threads); }
@@ -476,6 +476,9 @@ void cui_sw_render(cui_sw_renderer *r, const cui_draw_data *dd, void *pixels, in
 
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBIW_MALLOC(size) cui_hs80_malloc(size)
+#define STBIW_REALLOC(pointer,size) cui_hs80_realloc(pointer,size)
+#define STBIW_FREE(pointer) cui_hs80_free(pointer)
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

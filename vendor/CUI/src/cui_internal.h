@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "cui/cui_hs80_memory.h"
 
 #define CUI_PI 3.14159265358979323846f
 

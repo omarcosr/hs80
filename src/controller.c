@@ -23,7 +23,7 @@ static void tray_menu(HWND window){
  POINT point;GetCursorPos(&point);SetForegroundWindow(window);
  UINT selected=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,point.x,point.y,0,window,NULL);
  DestroyMenu(menu);
- if(selected==1)hs_launch_panel();else if(selected==2)set_lights(!lights_off);
+ if(selected==1)hs_panel_show();else if(selected==2)set_lights(!lights_off);
  else if(selected==3)hs_set_autostart(!hs_autostart_enabled());else if(selected==4)SetEvent(stop_event);
  PostMessageW(window,WM_NULL,0,0);
 }
@@ -31,9 +31,11 @@ static LRESULT CALLBACK controller_proc(HWND window,UINT message,WPARAM wparam,L
  switch(message){
  case HS_MSG_LEDS:if(wparam<=1)set_lights(wparam!=0);return 0;
  case HS_MSG_UNMUTE:unmute_requested=true;return 0;
- case HS_MSG_SHOW:hs_launch_panel();return 0;
+ case HS_MSG_SHOW:hs_panel_show();return 0;
+ case HS_MSG_HIDE:hs_panel_close();return 0;
+ case HS_MSG_PANEL_DONE:hs_panel_reap((ULONG_PTR)wparam);return 0;
  case TRAY_CALLBACK:
-  if(LOWORD(lparam)==WM_LBUTTONDBLCLK||LOWORD(lparam)==NIN_SELECT)hs_launch_panel();
+  if(LOWORD(lparam)==WM_LBUTTONDBLCLK||LOWORD(lparam)==NIN_SELECT)hs_panel_show();
   else if(LOWORD(lparam)==WM_RBUTTONUP||LOWORD(lparam)==WM_CONTEXTMENU)tray_menu(window);
   return 0;
  case WM_CLOSE:SetEvent(stop_event);return 0;
@@ -45,7 +47,7 @@ static void update(hs_state *mapped,LONG status,DWORD error){
  static hs_state last={0};static bool sent=false;
  published.status=status;published.leds_off=lights_off?1:0;published.error=error;hs_publish(mapped,&published);
  if(!sent||memcmp(&last,&published,sizeof(last))!=0){
-  HWND panel=FindWindowW(NULL,HS_PANEL_TITLE);if(panel)PostMessageW(panel,HS_MSG_STATE,0,0);
+  HWND panel=hs_panel_window();if(panel)PostMessageW(panel,HS_MSG_STATE,0,0);
   last=published;sent=true;
  }
 }
@@ -106,12 +108,20 @@ failed:
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE previous,LPWSTR command_line,int show){
  (void)previous;(void)command_line;(void)show;
  int argc=0;LPWSTR *argv=CommandLineToArgvW(GetCommandLineW(),&argc);const wchar_t *command=argc>1?argv[1]:L"--show";
+ if(wcscmp(command,L"--capture")==0){LocalFree(argv);return hs_panel_capture();}
+ if(wcscmp(command,L"--hide")==0){HWND controller=hs_controller_window();if(controller)PostMessageW(controller,HS_MSG_HIDE,0,0);LocalFree(argv);return 0;}
  if(wcscmp(command,L"--stop")==0){HANDLE stop=OpenEventW(EVENT_MODIFY_STATE,FALSE,HS_STOP);if(stop){SetEvent(stop);CloseHandle(stop);}LocalFree(argv);return 0;}
  if(wcscmp(command,L"--status")==0){hs_state state={0};bool ok=hs_read_state(&state);if(!ok){state.status=HS_STOPPED;state.battery=-1;state.mic_hardware=state.mic_windows=-1;}hs_status_json(&state);LocalFree(argv);return ok?0:1;}
  bool show_panel=wcscmp(command,L"--show")==0;
  if(!show_panel&&wcscmp(command,L"--run")!=0){LocalFree(argv);return 2;}
  HANDLE mutex=CreateMutexW(NULL,TRUE,HS_MUTEX);if(!mutex){LocalFree(argv);return 1;}
- if(GetLastError()==ERROR_ALREADY_EXISTS){if(show_panel)hs_launch_panel();CloseHandle(mutex);LocalFree(argv);return 0;}
+ if(GetLastError()==ERROR_ALREADY_EXISTS){
+  if(show_panel){
+   HWND controller=NULL;for(int attempt=0;attempt<20&&!controller;attempt++){controller=hs_controller_window();if(!controller)Sleep(25);}
+   if(controller){DWORD pid=0;GetWindowThreadProcessId(controller,&pid);if(pid)AllowSetForegroundWindow(pid);PostMessageW(controller,HS_MSG_SHOW,0,0);}
+  }
+  CloseHandle(mutex);LocalFree(argv);return 0;
+ }
  stop_event=CreateEventW(NULL,TRUE,FALSE,HS_STOP);if(!stop_event){ReleaseMutex(mutex);CloseHandle(mutex);LocalFree(argv);return 1;}ResetEvent(stop_event);
  HANDLE map=CreateFileMappingW(INVALID_HANDLE_VALUE,NULL,PAGE_READWRITE,0,sizeof(hs_state),HS_MAP);
  hs_state *mapped=map?MapViewOfFile(map,FILE_MAP_WRITE,0,0,sizeof(hs_state)):NULL;
@@ -120,8 +130,11 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE previous,LPWSTR command_line,in
  HWND window=CreateWindowExW(0,HS_WINDOW,L"HS80 LEDs",0,0,0,0,0,HWND_MESSAGE,NULL,instance,NULL);
  tray_icon=hs_icon();memset(&tray,0,sizeof(tray));tray.cbSize=sizeof(tray);tray.hWnd=window;tray.uID=1;tray.uFlags=NIF_ICON|NIF_MESSAGE|NIF_TIP;tray.uCallbackMessage=TRAY_CALLBACK;tray.hIcon=tray_icon;
  wcscpy_s(tray.szTip,128,L"HS80 MAX · Controle dos LEDs");Shell_NotifyIconW(NIM_ADD,&tray);tray.uVersion=NOTIFYICON_VERSION_4;Shell_NotifyIconW(NIM_SETVERSION,&tray);
- lights_off=hs_led_preference();HRESULT hr=CoInitializeEx(NULL,COINIT_APARTMENTTHREADED);int result=1;
- if(SUCCEEDED(hr)){if(show_panel)hs_launch_panel();result=run_controller(mapped);CoUninitialize();}
+ lights_off=hs_led_preference();published.pid=GetCurrentProcessId();published.mic_hardware=published.mic_windows=published.battery=published.charging=-1;
+ hs_bind_state(mapped);update(mapped,HS_CONNECTING,0);
+ HRESULT hr=CoInitializeEx(NULL,COINIT_APARTMENTTHREADED);int result=1;
+ if(SUCCEEDED(hr)){if(show_panel)hs_panel_show();result=run_controller(mapped);hs_panel_shutdown();CoUninitialize();}
+ hs_bind_state(NULL);
  Shell_NotifyIconW(NIM_DELETE,&tray);if(tray_icon)DestroyIcon(tray_icon);if(window)DestroyWindow(window);
  UnmapViewOfFile(mapped);CloseHandle(map);CloseHandle(stop_event);ReleaseMutex(mutex);CloseHandle(mutex);LocalFree(argv);return result;
 }

@@ -2790,6 +2790,7 @@ const unsigned char cui_font_geist_medium[14876] = {
   47,175,147,151,210,50,21,235,228,142,242,58,57,17,255,1,
 };
 
+#ifndef CUI_HS80_ESSENTIALS
 const unsigned int cui_font_geist_mono_size = 16380;      /* unpacked */
 const unsigned int cui_font_geist_mono_packed = 9947;    /* raw DEFLATE */
 const unsigned char cui_font_geist_mono[9947] = {
@@ -3293,6 +3294,7 @@ const unsigned char cui_font_geist_mono[9947] = {
   132,248,214,21,4,254,7,
 };
 
+#endif
 const unsigned int cui_font_lucide_size = 58504;      /* unpacked */
 const unsigned int cui_font_lucide_packed = 30927;    /* raw DEFLATE */
 const unsigned char cui_font_lucide[30927] = {

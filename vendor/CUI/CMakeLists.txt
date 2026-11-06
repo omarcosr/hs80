@@ -2,7 +2,7 @@
 add_library(cui STATIC
  src/cui_core.c src/cui_theme.c src/cui_draw.c src/cui_text.c
  src/cui_layout.c src/cui_widgets.c src/cui_controls.c src/cui_overlay.c
- src/cui_font_data.c src/cui_inflate.c
+ src/cui_font_data.c src/cui_inflate.c src/cui_hs80_memory.c
  src/render/cui_render_sw.c
  src/platform/cui_app.c src/platform/cui_app_win32.c)
 add_library(cui::cui ALIAS cui)

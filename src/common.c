@@ -4,26 +4,34 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <string.h>
+static hs_state *volatile local_state;
 
 bool hs_paths(wchar_t *worker,wchar_t *panel,wchar_t *ini,size_t cap){
  wchar_t base[1024];DWORD n=GetModuleFileNameW(NULL,base,1024);
  if(!n||n>=1024)return false;
+ if(worker&&wcsncpy_s(worker,cap,base,_TRUNCATE)!=0)return false;
+ if(panel&&wcsncpy_s(panel,cap,base,_TRUNCATE)!=0)return false;
  wchar_t *slash=wcsrchr(base,L'\\');if(!slash)return false;slash[1]=0;
- if(worker&&swprintf_s(worker,cap,L"%sHS80-Leds.exe",base)<0)return false;
- if(panel&&swprintf_s(panel,cap,L"%sHS80-Controle.exe",base)<0)return false;
  if(ini&&swprintf_s(ini,cap,L"%shs80.ini",base)<0)return false;
  return true;
 }
-bool hs_read_state(hs_state *out){
- HANDLE h=OpenFileMappingW(FILE_MAP_READ,FALSE,HS_MAP);if(!h)return false;
- hs_state *p=MapViewOfFile(h,FILE_MAP_READ,0,0,sizeof(*p));bool ok=false;
- if(p){for(int i=0;i<5;i++){
+static bool snapshot(const hs_state *p,hs_state *out){
+ for(int i=0;i<5;i++){
   LONG before=*(volatile LONG *)&p->sequence;
   if(before&1){SwitchToThread();continue;}
   MemoryBarrier();memcpy(out,p,sizeof(*out));MemoryBarrier();
   LONG after=*(volatile LONG *)&p->sequence;
-  if(before==after&&out->magic==HS_STATE_MAGIC&&out->version==1){ok=true;break;}
- }UnmapViewOfFile(p);}
+  if(before==after&&out->magic==HS_STATE_MAGIC&&out->version==1)return true;
+ }
+ return false;
+}
+void hs_bind_state(hs_state *mapped){InterlockedExchangePointer((PVOID volatile *)&local_state,mapped);}
+bool hs_read_state(hs_state *out){
+ hs_state *cached=InterlockedCompareExchangePointer((PVOID volatile *)&local_state,NULL,NULL);
+ if(cached)return snapshot(cached,out);
+ HANDLE h=OpenFileMappingW(FILE_MAP_READ,FALSE,HS_MAP);if(!h)return false;
+ hs_state *p=MapViewOfFile(h,FILE_MAP_READ,0,0,sizeof(*p));bool ok=false;
+ if(p){ok=snapshot(p,out);UnmapViewOfFile(p);}
  CloseHandle(h);return ok;
 }
 void hs_publish(hs_state *p,const hs_state *s){
@@ -41,8 +49,7 @@ bool hs_launch(const wchar_t *path,const wchar_t *arguments){
  if(!CreateProcessW(path,command,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&si,&pi))return false;
  CloseHandle(pi.hThread);CloseHandle(pi.hProcess);return true;
 }
-bool hs_launch_worker(void){wchar_t path[1024];return hs_paths(path,NULL,NULL,1024)&&hs_launch(path,L"--run");}
-bool hs_launch_panel(void){wchar_t path[1024];return hs_paths(NULL,path,NULL,1024)&&hs_launch(path,L"");}
+bool hs_launch_worker(void){if(hs_controller_window())return true;wchar_t path[1024];return hs_paths(path,NULL,NULL,1024)&&hs_launch(path,L"--run");}
 static bool startup_command(wchar_t *out,size_t cap){
  wchar_t path[1024];return hs_paths(path,NULL,NULL,1024)&&swprintf_s(out,cap,L"\"%s\" --run",path)>=0;
 }
@@ -86,5 +93,6 @@ void hs_status_json(const hs_state *s){
  wchar_t path[1024];if(!hs_paths(NULL,NULL,path,1024))return;
  wchar_t *slash=wcsrchr(path,L'\\');if(!slash)return;wcscpy_s(slash+1,1024-(size_t)(slash+1-path),L"estado-nativo.json");
  FILE *file=NULL;if(_wfopen_s(&file,path,L"wb")!=0||!file)return;
- fprintf(file,"{\"version\":2,\"pid\":%lu,\"status\":%ld,\"ledsOff\":%ld,\"micHardware\":%ld,\"micWindows\":%ld,\"battery\":%ld,\"charging\":%ld,\"updated\":%llu,\"error\":%lu}\n",s->pid,s->status,s->leds_off,s->mic_hardware,s->mic_windows,s->battery,s->charging,(unsigned long long)s->updated,s->error);fclose(file);
+ HWND panel=FindWindowW(NULL,HS_PANEL_TITLE);DWORD panel_pid=0;if(panel)GetWindowThreadProcessId(panel,&panel_pid);
+ fprintf(file,"{\"version\":3,\"pid\":%lu,\"status\":%ld,\"ledsOff\":%ld,\"micHardware\":%ld,\"micWindows\":%ld,\"battery\":%ld,\"charging\":%ld,\"updated\":%llu,\"error\":%lu,\"panelOpen\":%s}\n",s->pid,s->status,s->leds_off,s->mic_hardware,s->mic_windows,s->battery,s->charging,(unsigned long long)s->updated,s->error,(panel&&panel_pid==s->pid)?"true":"false");fclose(file);
 }

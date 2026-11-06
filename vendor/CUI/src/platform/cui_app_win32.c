@@ -193,7 +193,7 @@ static const char *cui__win32_get_clip(void *user) {
         if (src) {
             int n = WideCharToMultiByte(CP_UTF8, 0, src, -1, NULL, 0, NULL, NULL);
             if (n > 0) {
-                char *buf = malloc((size_t)n);
+                char *buf = cui_hs80_malloc((size_t)n);
                 if (buf) {
                     WideCharToMultiByte(CP_UTF8, 0, src, -1, buf, n, NULL, NULL);
                     /* drop carriage returns */
@@ -201,7 +201,7 @@ static const char *cui__win32_get_clip(void *user) {
                     for (char *p = buf; *p; p++) if (*p != '\r') *o++ = *p;
                     *o = 0;
                     cui__app_set_clipboard_cache(app, buf);
-                    free(buf);
+                    cui_hs80_free(buf);
                     result = app->clipboard;
                 }
             }
@@ -300,17 +300,17 @@ static LRESULT CALLBACK cui__win32_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         int got = 0;
         for (UINT i = 0; i < n; i++) {
             UINT len = DragQueryFileW(drop, i, NULL, 0);
-            WCHAR *wbuf = (WCHAR *)malloc(sizeof(WCHAR) * (len + 1));
+            WCHAR *wbuf = (WCHAR *)cui_hs80_malloc(sizeof(WCHAR) * (len + 1));
             if (!wbuf) continue;
             DragQueryFileW(drop, i, wbuf, len + 1);
             int u = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, NULL, 0, NULL, NULL);
-            char *ubuf = u > 0 ? (char *)malloc((size_t)u) : NULL;
+            char *ubuf = u > 0 ? (char *)cui_hs80_malloc((size_t)u) : NULL;
             if (ubuf) { WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, ubuf, u, NULL, NULL); paths[got++] = ubuf; }
-            free(wbuf);
+            cui_hs80_free(wbuf);
         }
         DragFinish(drop);
         cui_input_file_drop(ui, (const char *const *)paths, got, (float)pt.x / s, (float)pt.y / s);
-        for (int i = 0; i < got; i++) free(paths[i]);
+        for (int i = 0; i < got; i++) cui_hs80_free(paths[i]);
         SetForegroundWindow(hwnd);
         return 0;
     }
@@ -365,7 +365,7 @@ static LRESULT CALLBACK cui__win32_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 
 bool cui__plat_init(cui_app *app) {
     cui__win32_dpi_awareness();
-    cui__win32 *w = calloc(1, sizeof *w);
+    cui__win32 *w = cui_hs80_calloc(1, sizeof *w);
     if (!w) return false;
     HINSTANCE inst = GetModuleHandleW(NULL);
     WNDCLASSEXW wc;
@@ -389,7 +389,7 @@ bool cui__plat_init(cui_app *app) {
     app->plat = w;
     w->hwnd = CreateWindowExW(0, wc.lpszClassName, title, style, CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
                               NULL, NULL, inst, app);
-    if (!w->hwnd) { free(w); app->plat = NULL; return false; }
+    if (!w->hwnd) { cui_hs80_free(w); app->plat = NULL; return false; }
     DragAcceptFiles(w->hwnd, TRUE);   /* files dropped from Explorer arrive as WM_DROPFILES */
     w->scale = cui__win32_window_scale(w->hwnd);
     if (w->scale != scale) {
@@ -430,7 +430,7 @@ void cui__plat_shutdown(cui_app *app) {
     if (w->hdc) ReleaseDC(w->hwnd, w->hdc);
     SetWindowLongPtrW(w->hwnd, GWLP_USERDATA, 0);   /* no more messages to the app */
     DestroyWindow(w->hwnd);
-    free(w);
+    cui_hs80_free(w);
     app->plat = NULL;
 }
 
