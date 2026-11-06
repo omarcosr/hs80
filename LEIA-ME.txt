@@ -1,0 +1,15 @@
+HS80 MAX — controle em C / CUI
+
+Abra HS80-Controle.exe nesta pasta dist. Ele inicia o controle em segundo
+plano quando necessário. Fechar a janela mantém o controle funcionando.
+
+No painel: LEDs apagados, estado do microfone, bateria e iniciar com Windows.
+No ícone perto do relógio: abrir painel ou encerrar controle.
+A haste continua controlando o mudo do microfone.
+
+Mantenha HS80-Controle.exe e HS80-Leds.exe juntos. hs80.ini guarda sua
+preferência de iluminação. A pasta licencas contém os avisos obrigatórios.
+Não precisa de .NET, navegador, arquivos de fontes externos ou DLLs do CUI.
+O programa usa as bibliotecas do próprio Windows.
+
+O projeto e as instruções de compilação ficam na pasta acima de dist.
