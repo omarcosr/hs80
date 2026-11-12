@@ -26,11 +26,8 @@ try{
  if(Get-Process -Name HS80,HS80-Leds,HS80-Controle -ErrorAction SilentlyContinue | Where-Object {$_.Path -in @($taskExe,$taskLegacyWorker,$taskLegacyPanel)}){throw 'O aplicativo ainda está ativo; dist não foi atualizada.'}
  cmake --build build --config Release --target dist --parallel 4 -- /nr:false
  if($LASTEXITCODE -ne 0){throw 'Falha ao preparar dist.'}
- $taskRunPath='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
- $taskRunKey=Get-Item -LiteralPath $taskRunPath -ErrorAction SilentlyContinue
- if($taskRunKey -and $taskRunKey.GetValue('HS80 LEDs Leve') -eq ('"'+$taskLegacyWorker+'" --run')){
-  New-ItemProperty -LiteralPath $taskRunPath -Name 'HS80 LEDs Leve' -PropertyType String -Value ('"'+$taskExe+'" --run') -Force|Out-Null
- }
+ $taskMigration=Start-Process -FilePath $taskExe -ArgumentList '--migrate-startup' -WindowStyle Hidden -Wait -PassThru
  if($Run -or $taskVisible){Start-Process -FilePath $taskExe}
  elseif($taskApps.Count){Start-Process -FilePath $taskExe -ArgumentList '--run' -WindowStyle Hidden}
+ if($taskMigration.ExitCode -ne 0){throw 'Falha ao migrar a inicialização do HS80 para o Agendador de Tarefas.'}
 }finally{Pop-Location}

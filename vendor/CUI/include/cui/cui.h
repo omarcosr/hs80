@@ -431,6 +431,8 @@ typedef struct cui_scroll_opts {
     float pad, gap;
     bool fade_edges;            /* content fades out at an edge with more to scroll */
     cui_color fade_color;       /* what it fades into (default: the nearest opaque box around it) */
+    bool persistent_bar;       /* show the thumb at rest when content overflows */
+    bool reveal_focus;         /* keep the control reached by Tab in view */
 } cui_scroll_opts;
 CUI_API void cui_scroll_begin(cui_ctx *ui, const cui_scroll_opts *opts);
 CUI_API void cui_scroll_end(cui_ctx *ui);

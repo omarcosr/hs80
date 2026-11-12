@@ -1,4 +1,4 @@
-# HS80 MAX — um executável e um processo
+# Controle de periféricos — um executável e um processo
 
 O produto é `dist/HS80.exe`. O mesmo processo mantém o controle do headset e abre uma única janela CUI sob demanda. Fechar a janela destrói a interface e devolve sua memória; o controle e o ícone perto do relógio continuam ativos.
 
@@ -10,7 +10,7 @@ Com CMake, Visual Studio Build Tools 2026 e Windows SDK instalados:
 .\Build.ps1 -Run
 ```
 
-O script compila em Release e roda os testes antes de parar o aplicativo em uso. Depois prepara `dist` e abre o executável único. Sem `-Run`, reabre o aplicativo caso já estivesse em uso. A configuração `dist/hs80.ini` é preservada. A inicialização habilitada para a versão anterior desta mesma pasta é migrada para `HS80.exe --run`.
+O script compila em Release e roda os testes antes de parar o aplicativo em uso. Depois prepara `dist` e abre o executável único. Sem `-Run`, reabre o aplicativo caso já estivesse em uso. A configuração `dist/hs80.ini` é preservada. Uma entrada de inicialização habilitada de uma versão anterior na mesma pasta é migrada para o Agendador de Tarefas.
 
 Os comandos de compilação separados são:
 
@@ -31,6 +31,8 @@ Encerre o aplicativo antes do último comando de preparação de `dist`. O scrip
 - `--stop`: encerra o aplicativo e devolve a iluminação ao hardware.
 - `--status`: consulta o processo em execução e grava o diagnóstico gerado `estado-nativo.json`; esse arquivo não é uma dependência.
 - `--capture`: captura de QA, somente quando a variável `CUI_SCREENSHOT` está definida; não inicia um segundo controlador.
+
+**Iniciar com o Windows** agenda `HS80.exe --run` para 15 segundos após o login da conta atual. A tarefa também roda na bateria. O ícone do HS80 aparece perto do relógio quando o controlador inicia.
 
 ## Eficiência e ciclo de vida
 
@@ -54,9 +56,21 @@ Licença MIT, licenças das fontes e avisos de terceiros preservados. As notas o
 
 ## Headset
 
+Em **Sons do microfone**, escolha separadamente os avisos **Ao ativar** e **Ao silenciar**. **Ouvir** toca uma prévia. Cada escolha começa em **Sem som** e fica salva em `hs80.ini`.
+
+Os avisos acompanham o mudo da haste e do Windows e usam a saída de áudio padrão. O primeiro estado detectado ao iniciar ou reconectar serve de referência. Os tons são gerados quando solicitados e o aplicativo libera o fluxo de áudio ao fim de cada reprodução.
+
 Receptor `1B1C:0A97`, headset filho `0A96`. Os comandos de iluminação e a sincronização do mudo físico permanecem os já validados. O aplicativo não grava áudio, usa a rede ou altera firmware. Pausa o acesso quando o iCUE abre e tenta reconectar quando ele fecha ou o dispositivo retorna.
 
-## Medições desta máquina
+## Mouse
+
+As duas abas mostram um aviso de conexão no lugar dos dados quando o dispositivo está indisponível. O estado **Desconectado** orienta como reconectar o headset ou o mouse.
+
+A aba **Mouse** lê o Razer Viper V3 Pro por cabo USB (`1532:00C0`) ou pelo receptor sem fio (`1532:00C1`). Ela mostra conexão, bateria e os valores atuais de DPI e polling. **Aplicar DPI** usa o valor digitado nos dois eixos. **Aplicar taxa** grava a opção escolhida e relê a configuração do dispositivo. O cabo oferece 125, 500 e 1000 Hz. O receptor também oferece 2000, 4000 e 8000 Hz.
+
+Com a aba **Mouse** selecionada, o painel atualiza ao receber do Windows um aviso de conexão ou remoção do cabo ou receptor USB. Ao reconectar, repete a leitura por até dez segundos. Quando o receptor sem fio está conectado e o Viper ainda está sem sinal, o painel mostra **Aguardando mouse**. O primeiro evento do Viper recebido na janela antecipa uma consulta. O painel também consulta ao abrir a aba, a cada 15 segundos enquanto ela está selecionada e ao clicar em **Atualizar**. As consultas de HID rodam em uma thread criada sob demanda e terminam após a resposta.
+
+## Medições da versão 2.1.0 nesta máquina
 
 Amostras de 30 segundos, 20 processadores lógicos, sem alterar artificialmente o working set:
 
@@ -70,4 +84,4 @@ A memória total após usar a interface não retorna exatamente ao valor de part
 
 A versão anterior, com dois processos, somava 9,79 MiB de memória privada com o painel aberto; a versão única mediu 7,59 MiB, cerca de 22,5% menos nesse indicador. A CPU permaneceu muito baixa; a amostra não estabelece uma redução garantida de CPU.
 
-Foram verificados oito ciclos de abertura/fechamento mantendo o PID do controlador, cinco solicitações simultâneas de abertura sem outro processo residente, contadores de handles/GDI/USER estáveis entre os ciclos, encerramento com a janela aberta e reinício oculto. O resultado detalhado fica em `build/verificacao-executavel-unico.json`. O executável tem 512.512 bytes (500,5 KiB).
+Foram verificados oito ciclos de abertura/fechamento mantendo o PID do controlador, cinco solicitações simultâneas de abertura sem outro processo residente, contadores de handles/GDI/USER estáveis entre os ciclos, encerramento com a janela aberta e reinício oculto. O resultado detalhado fica em `build/verificacao-executavel-unico.json`. O executável medido tinha 512.512 bytes (500,5 KiB).

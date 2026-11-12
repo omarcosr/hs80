@@ -50,26 +50,22 @@ bool hs_launch(const wchar_t *path,const wchar_t *arguments){
  CloseHandle(pi.hThread);CloseHandle(pi.hProcess);return true;
 }
 bool hs_launch_worker(void){if(hs_controller_window())return true;wchar_t path[1024];return hs_paths(path,NULL,NULL,1024)&&hs_launch(path,L"--run");}
-static bool startup_command(wchar_t *out,size_t cap){
- wchar_t path[1024];return hs_paths(path,NULL,NULL,1024)&&swprintf_s(out,cap,L"\"%s\" --run",path)>=0;
-}
-bool hs_autostart_enabled(void){
- wchar_t expected[1200],actual[1200];DWORD size=sizeof(actual);
- if(!startup_command(expected,1200))return false;
- if(RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",HS_RUN_NAME,RRF_RT_REG_SZ,NULL,actual,&size)!=ERROR_SUCCESS)return false;
- return _wcsicmp(expected,actual)==0;
-}
-bool hs_set_autostart(bool enabled){
- HKEY key;wchar_t command[1200];if(!startup_command(command,1200))return false;
- LONG result=RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",0,NULL,0,KEY_SET_VALUE,NULL,&key,NULL);
- if(result!=ERROR_SUCCESS){SetLastError((DWORD)result);return false;}
- if(enabled)result=RegSetValueExW(key,HS_RUN_NAME,0,REG_SZ,(BYTE *)command,(DWORD)((wcslen(command)+1)*sizeof(wchar_t)));
- else result=RegDeleteValueW(key,HS_RUN_NAME);
- RegCloseKey(key);if(result==ERROR_FILE_NOT_FOUND&&!enabled)return true;
- if(result!=ERROR_SUCCESS)SetLastError((DWORD)result);return result==ERROR_SUCCESS;
-}
 bool hs_led_preference(void){wchar_t path[1024];return !hs_paths(NULL,NULL,path,1024)||GetPrivateProfileIntW(L"controle",L"leds_apagados",1,path)!=0;}
 bool hs_save_led_preference(bool off){wchar_t path[1024];return hs_paths(NULL,NULL,path,1024)&&WritePrivateProfileStringW(L"controle",L"leds_apagados",off?L"1":L"0",path);}
+int hs_sound_preference(bool mic_active){
+ wchar_t path[1024];
+ if(!hs_paths(NULL,NULL,path,1024))return HS_SOUND_NONE;
+ UINT value=GetPrivateProfileIntW(L"sons",mic_active?L"microfone_ativo":L"microfone_mudo",HS_SOUND_COUNT,path);
+ if(value==HS_SOUND_COUNT)
+  value=GetPrivateProfileIntW(L"sons",mic_active?L"conectar":L"desconectar",HS_SOUND_NONE,path);
+ return value<HS_SOUND_COUNT?(int)value:HS_SOUND_NONE;
+}
+bool hs_save_sound_preference(bool mic_active,int sound){
+ wchar_t path[1024],value[12];
+ if(sound<HS_SOUND_NONE||sound>=HS_SOUND_COUNT||!hs_paths(NULL,NULL,path,1024))return false;
+ swprintf_s(value,sizeof(value)/sizeof(value[0]),L"%d",sound);
+ return WritePrivateProfileStringW(L"sons",mic_active?L"microfone_ativo":L"microfone_mudo",value,path)!=0;
+}
 bool hs_process_present(const wchar_t *name){
  HANDLE snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);if(snapshot==INVALID_HANDLE_VALUE)return false;
  PROCESSENTRY32W entry={sizeof(entry)};bool found=false;

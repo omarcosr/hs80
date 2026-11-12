@@ -281,6 +281,7 @@ typedef struct cui_scroll_state {
     bool drag_y, drag_x;
     float drag_grab;
     bool hover_bar;
+    bool persistent_bar, reveal_focus;
     cui_color fade;             /* edge fade color, alpha 0 for none */
 } cui_scroll_state;
 
@@ -428,6 +429,7 @@ struct cui_ctx {
     cui_id active;                  /* item being pressed/dragged */
     cui_id focus;                   /* keyboard focus */
     bool focus_visible;             /* focus came from the keyboard */
+    bool focus_tabbed;
     cui_id focus_next_request;
     int focus_move;                 /* +1/-1 tab navigation requested */
     cui_id *focus_order; int focus_count, focus_cap;

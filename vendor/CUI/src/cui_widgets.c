@@ -1063,6 +1063,7 @@ void cui__scroll_end_ex(cui_ctx *ui) { cui__close(ui); }
 
 void cui__paint_scrollbars(cui_ctx *ui, cui_node *n, cui_rect clip) {
     cui_scroll_state *st = cui_state(ui, n->id, sizeof *st);
+    float visibility = st->persistent_bar ? 1.0f : st->bar_t;
     cui_rect r = n->rect;
     float max_y = st->content_h - r.h;
     if (st->fade.a > 0 && max_y > 0.5f) {
@@ -1119,23 +1120,23 @@ void cui__paint_scrollbars(cui_ctx *ui, cui_node *n, cui_rect clip) {
     if (max_y > 0.5f) {
         cui_rect zone = { r.x + r.w - CUI__BAR_ZONE, r.y, CUI__BAR_ZONE, r.h };
         cui__paint_add_hit(ui, n->id ^ 0x5C5C5C5Cu, cui__rect_intersect(zone, clip), CUI_NF_INTERACTIVE);
-        if (st->bar_t > 0.01f) {
+        if (visibility > 0.01f) {
             float thumb_h = CUI_MAX(28.0f, r.h * r.h / st->content_h);
             float track = r.h - thumb_h - 6;
             float y = r.y + 3 + cui__clampf(st->y / max_y, 0, 1) * track;
             bool big = st->hover_bar || st->drag_y;
             float w = big ? 8 : 6;
             cui_rect th = { r.x + r.w - w - 3, y, w, thumb_h };
-            cui_color c = cui_alpha(CUI_C(ui, FOREGROUND), (big ? 0.38f : 0.26f) * st->bar_t);
+            cui_color c = cui_alpha(CUI_C(ui, FOREGROUND), (big ? 0.38f : 0.26f) * visibility);
             cui_draw_rect(ui, th, CUI_CORNERS(w * 0.5f), c);
         }
     }
-    if ((n->flags & CUI_NF_SCROLL_X) && max_x > 0.5f && st->bar_t > 0.01f) {
+    if ((n->flags & CUI_NF_SCROLL_X) && max_x > 0.5f && visibility > 0.01f) {
         float thumb_w = CUI_MAX(28.0f, r.w * r.w / st->content_w);
         float track = r.w - thumb_w - 6;
         float x = r.x + 3 + cui__clampf(st->x / max_x, 0, 1) * track;
         cui_rect th = { x, r.y + r.h - 9, thumb_w, 6 };
-        cui_draw_rect(ui, th, CUI_CORNERS(3), cui_alpha(CUI_C(ui, FOREGROUND), 0.26f * st->bar_t));
+        cui_draw_rect(ui, th, CUI_CORNERS(3), cui_alpha(CUI_C(ui, FOREGROUND), 0.26f * visibility));
     }
 }
 
@@ -1152,6 +1153,8 @@ void cui_scroll_begin(cui_ctx *ui, const cui_scroll_opts *o) {
     b.gap = o->gap;
     cui_scroll_state *st = cui_state(ui, id, sizeof *st);
     st->fade = o->fade_edges ? (cui__color_set(o->fade_color) ? cui_color_of(ui, o->fade_color) : cui__backdrop(ui)) : cui__rgba(0, 0, 0, 0);
+    st->persistent_bar = o->persistent_bar;
+    st->reveal_focus = o->reveal_focus;
     cui__scroll_begin_ex(ui, id, &b, o->horizontal);
 }
 

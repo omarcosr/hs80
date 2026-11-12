@@ -1,11 +1,20 @@
-HS80 MAX — executável único em C / CUI
+Controle de periféricos — executável único em C / CUI
 
-Abra HS80.exe. O mesmo processo controla o headset e abre o painel.
+Abra HS80.exe. À direita na barra de título, use Headset para o HS80 MAX
+e Mouse para o Razer Viper V3 Pro. Na aba Mouse, consulte conexão e bateria,
+escolha o DPI ou a taxa de polling e clique em Aplicar DPI ou Aplicar taxa.
+Se o dispositivo estiver indisponível, a aba mostra como reconectá-lo
+no lugar dos dados. Com o receptor conectado e o Viper sem sinal,
+a aba mostra Aguardando mouse.
 Fechar a janela libera a memória da interface e mantém LEDs e microfone.
 No ícone perto do relógio: abrir painel ou encerrar o aplicativo.
 
 O painel contém LEDs apagados, estado do microfone, bateria e iniciar
 com o Windows. A haste continua controlando o mudo do microfone.
+Com Iniciar com o Windows ligado, o Agendador abre o controlador em
+segundo plano cerca de 15 segundos após o login da sua conta.
+Em Sons do microfone, escolha um aviso para ativar e outro para silenciar.
+Ouvir toca uma prévia e Sem som deixa o evento silencioso.
 
 HS80.exe --run inicia somente em segundo plano. A janela é criada apenas
 quando solicitada. Não depende de outro programa, .NET, navegador,

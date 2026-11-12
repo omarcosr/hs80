@@ -828,6 +828,32 @@ static void cui__layout_float(cui_ctx *ui, int i) {
     cui__place(ui, i);
 }
 
+static bool cui__reveal_tab_focus(cui_ctx *ui) {
+    if (!ui->focus_tabbed || !ui->focus) return false;
+    for (int i = 0; i < ui->node_count; i++) {
+        cui_node *item = &ui->nodes[i];
+        if (item->id != ui->focus || !(item->flags & CUI_NF_INTERACTIVE)) continue;
+        for (int p = item->parent; p >= 0; p = ui->nodes[p].parent) {
+            cui_node *view = &ui->nodes[p];
+            if (!(view->flags & CUI_NF_SCROLL_Y)) continue;
+            cui_scroll_state *scroll = cui_state(ui, view->id, sizeof *scroll);
+            float limit = scroll->content_h - view->rect.h;
+            if (!scroll->reveal_focus || limit <= 0) continue;
+            float margin = CUI_MIN(8.0f, CUI_MAX(0.0f, (view->rect.h - item->rect.h) * 0.5f));
+            float top = view->rect.y + margin, bottom = view->rect.y + view->rect.h - margin;
+            float delta = item->rect.y < top ? item->rect.y - top :
+                          CUI_MAX(0.0f, item->rect.y + item->rect.h - bottom);
+            float offset = cui__clampf(view->scroll_y + delta, 0, limit);
+            if (delta == 0 || fabsf(offset - view->scroll_y) < 0.25f) return false;
+            scroll->ty = scroll->y = offset;
+            view->scroll_y = roundf(offset * ui->scale) / ui->scale;
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
 void cui__layout(cui_ctx *ui) {
     if (ui->node_count == 0) return;
     cui_node *root = &ui->nodes[0];
@@ -841,6 +867,7 @@ void cui__layout(cui_ctx *ui) {
     root->rect.h = ui->vh;
     cui__resolve_h(ui, 0);
     cui__place(ui, 0);
+    if (cui__reveal_tab_focus(ui)) cui__place(ui, 0);
     for (int k = 0; k < ui->float_count; k++) cui__layout_float(ui, ui->float_roots[k]);
 }
 

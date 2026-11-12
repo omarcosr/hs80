@@ -27,10 +27,11 @@ static bool command(hs_hid *d,BYTE packet[64],BYTE child,BYTE cmd,uint16_t *valu
 bool hs_hid_get(hs_hid *d,uint8_t child,uint8_t property,uint16_t *value){BYTE packet[64];hs_packet_get(packet,child,property);return command(d,packet,child,2,value);}
 static bool set(hs_hid *d,BYTE property,uint16_t value){BYTE packet[64];hs_packet_set(packet,property,value);return command(d,packet,1,1,NULL);}
 void hs_hid_close(hs_hid *d){if(d->handle&&d->handle!=INVALID_HANDLE_VALUE){CancelIoEx(d->handle,NULL);CloseHandle(d->handle);}d->handle=NULL;if(d->io_event)CloseHandle(d->io_event);d->io_event=NULL;}
-bool hs_hid_open(hs_hid *d,HANDLE stop){
- memset(d,0,sizeof(*d));d->stop=stop;GUID guid;HidD_GetHidGuid(&guid);
- HDEVINFO list=SetupDiGetClassDevsW(&guid,NULL,NULL,DIGCF_PRESENT|DIGCF_DEVICEINTERFACE);if(list==INVALID_HANDLE_VALUE)return false;
- wchar_t selected[1024]={0};bool ambiguous=false;
+uint16_t hid_find_collection(const hid_collection *match,wchar_t path[HID_PATH_CAPACITY]){
+ GUID guid;HidD_GetHidGuid(&guid);
+ HDEVINFO list=SetupDiGetClassDevsW(&guid,NULL,NULL,DIGCF_PRESENT|DIGCF_DEVICEINTERFACE);
+ if(list==INVALID_HANDLE_VALUE)return 0;
+ uint16_t selected=0;bool ambiguous=false;
  for(DWORD i=0;;i++){
   SP_DEVICE_INTERFACE_DATA iface={sizeof(iface)};
   if(!SetupDiEnumDeviceInterfaces(list,NULL,&guid,i,&iface))break;
@@ -42,17 +43,30 @@ bool hs_hid_open(hs_hid *d,HANDLE stop){
    HANDLE h=CreateFileW(detail->DevicePath,0,FILE_SHARE_READ|FILE_SHARE_WRITE,NULL,OPEN_EXISTING,0,NULL);
    if(h!=INVALID_HANDLE_VALUE){
     HIDD_ATTRIBUTES attributes={sizeof(attributes)};PHIDP_PREPARSED_DATA data=NULL;HIDP_CAPS caps;
-    if(HidD_GetAttributes(h,&attributes)&&attributes.VendorID==0x1b1c&&attributes.ProductID==0x0a97&&HidD_GetPreparsedData(h,&data)){
-     if(HidP_GetCaps(data,&caps)==HIDP_STATUS_SUCCESS&&caps.UsagePage==0xff42&&caps.Usage==1&&caps.InputReportByteLength==64&&caps.OutputReportByteLength==64){
-      if(selected[0])ambiguous=true;else wcsncpy_s(selected,1024,detail->DevicePath,_TRUNCATE);
+    if(HidD_GetAttributes(h,&attributes)&&attributes.VendorID==match->vendor&&
+       (attributes.ProductID==match->product||(match->alternate_product&&attributes.ProductID==match->alternate_product&&selected!=match->product))&&
+       HidD_GetPreparsedData(h,&data)){
+     if(HidP_GetCaps(data,&caps)==HIDP_STATUS_SUCCESS&&caps.UsagePage==match->usage_page&&caps.Usage==match->usage&&
+        (!match->input_bytes||caps.InputReportByteLength==match->input_bytes)&&
+        (!match->output_bytes||caps.OutputReportByteLength==match->output_bytes)&&
+        (!match->feature_bytes||caps.FeatureReportByteLength==match->feature_bytes)){
+      if(selected==attributes.ProductID)ambiguous=true;
+      else if(wcsncpy_s(path,HID_PATH_CAPACITY,detail->DevicePath,_TRUNCATE)==0){selected=attributes.ProductID;ambiguous=false;}
      }HidD_FreePreparsedData(data);
     }CloseHandle(h);
    }
   }HeapFree(GetProcessHeap(),0,detail);
  }
- SetupDiDestroyDeviceInfoList(list);
- if(!selected[0]||ambiguous){SetLastError(ambiguous?ERROR_DUP_NAME:ERROR_DEVICE_NOT_CONNECTED);return false;}
- d->handle=CreateFileW(selected,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,NULL,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,NULL);
+ DWORD error=GetLastError();SetupDiDestroyDeviceInfoList(list);
+ if(error!=ERROR_NO_MORE_ITEMS){SetLastError(error);return 0;}
+ if(!selected||ambiguous){SetLastError(ambiguous?ERROR_DUP_NAME:ERROR_DEVICE_NOT_CONNECTED);return 0;}
+ return selected;
+}
+bool hs_hid_open(hs_hid *d,HANDLE stop){
+ static const hid_collection match={.vendor=0x1b1c,.product=0x0a97,.usage_page=0xff42,.usage=1,.input_bytes=64,.output_bytes=64};
+ memset(d,0,sizeof(*d));d->stop=stop;
+ wchar_t path[HID_PATH_CAPACITY];if(!hid_find_collection(&match,path))return false;
+ d->handle=CreateFileW(path,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,NULL,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,NULL);
  if(d->handle==INVALID_HANDLE_VALUE){d->handle=NULL;return false;}
  d->io_event=CreateEventW(NULL,TRUE,FALSE,NULL);
  if(!d->io_event){DWORD error=GetLastError();hs_hid_close(d);SetLastError(error);return false;}
